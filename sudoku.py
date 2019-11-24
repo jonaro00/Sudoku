@@ -38,17 +38,17 @@ class Sudoku(object):
 			board.append([0]*9)
 		for i in [0]: # , 3, 6
 			while True:
-					for j, c in enumerate(board[i]):
-						try:
-							x = get_entries_left(board, i, j)
-							board[i][j] = random.choice(x)
-						except IndexError:
-							board[i] = [0]*9
-							break
-						if debug: Sudoku.print_board(board)
-					else:
-						if Sudoku.soft_valid(board):
-							break
+				for j, c in enumerate(board[i]):
+					try:
+						x = get_entries_left(board, i, j)
+						board[i][j] = random.choice(x)
+					except IndexError:
+						board[i] = [0]*9
+						break
+					if debug: Sudoku.print_board(board)
+				else:
+					if Sudoku.soft_valid(board):
+						break
 		can_be = []
 		for _ in range(9):
 			can_be.append([])
