@@ -1,79 +1,107 @@
 import random
 import time
 
-class Sudoku(object):
+class Sudoku:
 
-	one_to_nine = [_ for _ in range(1,10)]
+	one_to_nine = [i for i in range(1,10)]
+	section_indicies = {0:(0,3,0,3),1:(0,3,3,6),2:(0,3,6,9),3:(3,6,0,3),4:(3,6,3,6),5:(3,6,6,9),6:(6,9,0,3),7:(6,9,3,6),8:(6,9,6,9)}
+
+	def __init__(self, debug=False):
+		self.board = self.new_board()
+		self.arrange_tile_groups()
+		self.generate(debug)
+
+
+	@property
+	def board2Dlist(self):
+		return [[t.value for t in r] for r in self.board]
+
 
 	@staticmethod
-	def generate(debug=False):
-
-		def get_row_entries_left(board, row_index):
-			return [n for n in Sudoku.one_to_nine if not n in board[row_index]]
+	def new_board():
+		return tuple(tuple(Sudoku.Tile() for __ in range(9)) for _ in range(9))
 
 
-		def get_col_entries_left(board, col_index):
-			col = [row[col_index] for row in board]
-			return [n for n in Sudoku.one_to_nine if not n in col]
-
-
-		def get_sec_entries_left(board, row_index, col_index):
-			sec_index = col_index // 3 + row_index // 3 * 3
-			i, j, k, l, = Sudoku.sections[str(sec_index)]
+	def arrange_tile_groups(self):
+		self.rows = tuple(Sudoku.Row(*r) for r in self.board)
+		self.cols = tuple(Sudoku.Col(*tuple(r[c] for r in self.board)) for c in range(9))
+		self.secs = []
+		for s in range(9):
+			i, j, k, l = self.section_indicies[s]
 			sec = []
 			for r in range(i,j):
-				sec.extend(board[r][k:l])
-			return [n for n in Sudoku.one_to_nine if not n in sec]
+				sec.extend(self.board[r][k:l])
+			self.secs.append(sec)
+		self.secs = tuple(Sudoku.Sec(*s) for s in self.secs)
 
 
-		def get_entries_left(board, row_index, col_index):
-			r = get_row_entries_left(board, row_index)
-			c = get_col_entries_left(board, col_index)
-			s = get_sec_entries_left(board, row_index, col_index)
-			return [n for n in Sudoku.one_to_nine if n in r and n in c and n in s]
+	@staticmethod
+	def section_index(row_index, col_index):
+		return col_index // 3 + row_index // 3 * 3
 
 
-		board = []
-		for _ in range(9):
-			board.append([0]*9)
-		for i in [0]: # , 3, 6
+	def generate(self, debug=False):
+		for i in (0, 3, 6): # 
 			while True:
-				for j, c in enumerate(board[i]):
+				for j in range(9):
 					try:
-						x = get_entries_left(board, i, j)
-						board[i][j] = random.choice(x)
+						x = self.get_entries_left(i, j)
+						self.board[i][j].value = random.choice(x)
 					except IndexError:
-						board[i] = [0]*9
+						for t in self.rows[i]:
+							t.value = 0
 						break
-					if debug: Sudoku.print_board(board)
+					if debug: self.print_board()
 				else:
-					if Sudoku.soft_valid(board):
+					if self.soft_valid():
 						break
-		can_be = []
-		for _ in range(9):
-			can_be.append([])
-			for __ in range(9):
-				can_be[-1].append([])
 		while True:
-			for i in [1, 2, 3, 4, 5, 6, 7, 8]: # 
-				for j, c in enumerate(board[i]):
-					can_be[i][j] = get_entries_left(board, i, j) if board[i][j] == 0 else []
+			for i in (1, 2, 4, 5, 7, 8): # , 3, 6
+				for j, t in enumerate(self.rows[i]):
+					t.can_be = self.get_entries_left(i, j) if t.value == 0 else []
+			can_be = []
 			can_be_len = [[c if c > 0 else 10 for c in [len(c) for c in r]] for r in can_be]
-			fewest_index = [None, None]
-			contains_min = 0
+			fewest_index = [0, 0]
+			row_contains_min = 0
 			for r in can_be_len:
-				if min(r) < min(can_be_len[contains_min]):
-					contains_min = can_be_len.index(r)
-			fewest_index[0] = contains_min
-			fewest_index[1] = can_be_len[contains_min].index(min(can_be_len[contains_min]))
+				if min(r) < min(can_be_len[row_contains_min]):
+					row_contains_min = can_be_len.index(r)
+			fewest_index[0] = row_contains_min
+			fewest_index[1] = can_be_len[row_contains_min].index(min(can_be_len[row_contains_min]))
 			
-			board[fewest_index[0]][fewest_index[1]] = random.choice(can_be[fewest_index[0]][fewest_index[1]])
+			self.board[fewest_index[0]][fewest_index[1]] = random.choice(can_be[fewest_index[0]][fewest_index[1]])
 			
-			if debug: Sudoku.print_board(board)
+			if debug: self.print_board()
 			
-			if Sudoku.hard_valid(board):
-				return board
+			if self.hard_valid():
+				return True
+		return False
 
+	def get_entries_left(self, row_index, col_index):
+
+		r = set(self.rows[row_index].entries_left)
+		c = set(self.cols[col_index].entries_left)
+		s = set(self.secs[self.section_index(row_index,col_index)].entries_left)
+		return list(set.intersection(r,c,s))
+
+		# def get_row_entries_left(board, row_index):
+		# 	return [n for n in Sudoku.one_to_nine if n not in board[row_index]]
+
+		# def get_col_entries_left(board, col_index):
+		# 	col = [row[col_index] for row in board]
+		# 	return [n for n in Sudoku.one_to_nine if n not in col]
+
+		# def get_sec_entries_left(board, row_index, col_index):
+		# 	sec_index = col_index // 3 + row_index // 3 * 3
+		# 	i, j, k, l, = Sudoku.section_indicies[sec_index]
+		# 	sec = []
+		# 	for r in range(i,j):
+		# 		sec.extend(board[r][k:l])
+		# 	return [n for n in Sudoku.one_to_nine if n not in sec]
+
+		# r = get_row_entries_left(board, row_index)
+		# c = get_col_entries_left(board, col_index)
+		# s = get_sec_entries_left(board, row_index, col_index)
 		
 
 
@@ -162,111 +190,132 @@ class Sudoku(object):
 				# rand_pool = []
 
 
-
-	@staticmethod
-	def solve(parameter_list):
+	def solve(self):
 		pass
 
 
-	sections = {"0":(0,3,0,3),"1":(0,3,3,6),"2":(0,3,6,9),"3":(3,6,0,3),"4":(3,6,3,6),"5":(3,6,6,9),"6":(6,9,0,3),"7":(6,9,3,6),"8":(6,9,6,9)}
-	
-	@staticmethod
-	def rows_soft_valid(board):
-		for row in board:
-			for i in range(1,10):
-				if row.count(i) > 1:
-					return False
+	def rows_soft_valid(self):
+		for row in self.rows:
+			if not row.soft_valid():
+				return False
 		return True
 
-
-	@staticmethod
-	def cols_soft_valid(board):
-		for c in range(len(board[0])):
-			col = [row[c] for row in board]
-			for i in range(1,10):
-				if col.count(i) > 1:
-					return False
+	def cols_soft_valid(self):
+		for col in self.cols:
+			if not col.soft_valid():
+				return False
 		return True
 
-
-	@staticmethod
-	def secs_soft_valid(board):
-		for s in range(9):
-			i, j, k, l = Sudoku.sections[str(s)]
-			sec = []
-			for r in range(i,j):
-				sec.extend(board[r][k:l])
-			for i in range(1,10):
-				if sec.count(i) > 1:
-					return False
+	def secs_soft_valid(self):
+		for sec in self.secs:
+			if not sec.soft_valid():
+				return False
 		return True
 
-
-	@staticmethod
-	def soft_valid(board):
-		if Sudoku.rows_soft_valid(board) and Sudoku.cols_soft_valid(board) and Sudoku.secs_soft_valid(board):
+	def soft_valid(self):
+		if self.rows_soft_valid() and self.cols_soft_valid() and self.secs_soft_valid():
 			return True
 		return False
 
-	
-	@staticmethod
-	def rows_hard_valid(board):
-		for row in board:
-			r = row[:]
-			r.sort()
-			if r != Sudoku.one_to_nine: 
+	def rows_hard_valid(self):
+		for row in self.rows:
+			if not row.hard_valid(): 
 				return False
 		return True
 
-
-	@staticmethod
-	def cols_hard_valid(board):
-		for c in range(len(board[0])):
-			col = [row[c] for row in board]
-			col.sort()
-			if col != Sudoku.one_to_nine:
+	def cols_hard_valid(self):
+		for col in self.cols:
+			if not col.hard_valid(): 
 				return False
 		return True
 
-
-	@staticmethod
-	def secs_hard_valid(board):
-		for s in range(9):
-			i, j, k, l = Sudoku.sections[str(s)]
-			sec = []
-			for r in range(i,j):
-				sec.extend(board[r][k:l])
-			sec.sort()
-			if sec != Sudoku.one_to_nine:
+	def secs_hard_valid(self):
+		for sec in self.secs:
+			if not sec.hard_valid(): 
 				return False
 		return True
 
-
-	@staticmethod
-	def hard_valid(board):
-		if Sudoku.rows_hard_valid(board) and Sudoku.cols_hard_valid(board) and Sudoku.secs_hard_valid(board):
+	def hard_valid(self):
+		if self.rows_hard_valid() and self.cols_hard_valid() and self.secs_hard_valid():
 			return True
 		return False
 
-	
-	@staticmethod
-	def print_board(board):
-		print('')
+
+	def print_board(self):
 		print('_'*27)
-		print(str(board).replace('],',']\n').replace('[[','[').replace(' [','[').replace(']]',']').replace(',',' ').replace('0',' ').replace('[','|').replace(']','|'))
+		print(str(self.board2Dlist).replace('],',']\n').replace('[[','[').replace(' [','[').replace(']]',']').replace(',',' ').replace('0',' ').replace('[','|').replace(']','|'))
 		print('▔'*26)
-
 	
-	@staticmethod
-	def print_list(board):
-		print('')
-		print(str(board).replace('],','],\n'))
+	def print_list(self):
+		print(str(self.board2Dlist).replace('],','],\n'))
+
+	class Tile:
+		def __init__(self):
+			self.value = 0
+			self.can_be = []
+
+		def __repr__(self):
+			return f'<Tile:{self.value}>'
+	
+	class TileGroup:
+		def __init__(self, *tiles):
+			self.tiles = tiles
+
+		def __repr__(self):
+			return f'<TileGroup:{str(self.values)}>'
+		
+		def __iter__(self):
+			return iter(self.tiles)
+		
+		@property
+		def values(self):
+			return [t.value for t in self.tiles]
+		
+		@property
+		def entries_left(self):
+			return [n for n in Sudoku.one_to_nine if n not in self.values]
+		
+		def soft_valid(self):
+			for i in Sudoku.one_to_nine:
+				if self.values.count(i) > 1:
+					return False
+			return True
+		
+		def hard_valid(self):
+			if sorted(self.values) == Sudoku.one_to_nine:
+				return True
+			return False
+
+	class Row(TileGroup):
+		def __repr__(self):
+			return f'<Row:{str(self.values)}>'
+
+	class Col(TileGroup):
+		def __repr__(self):
+			return f'<Col:{str(self.values)}>'
+
+	class Sec(TileGroup):
+		def __repr__(self):
+			return f'<Sec:{str(self.values)}>'
+
+
+# t0 = time.time()
+# success = 0
+# for _ in range(1000):
+# 	try:
+# 		if Sudoku.generate():
+# 			success += 1
+# 	except:
+# 		pass
+# print(success)
+# t1 = time.time()
+# print(t1-t0, 'seconds')
 
 t0 = time.time()
-sud = Sudoku.generate(debug=True)
+sud = Sudoku(debug=True)
 t1 = time.time()
 print('Generated Sudoku in:', t1-t0, 'seconds')
-Sudoku.print_board(sud)
+sud.print_board()
 
 # test_sudoku = [
 # 	[8,0,0,0,0,0,7,0,0],
